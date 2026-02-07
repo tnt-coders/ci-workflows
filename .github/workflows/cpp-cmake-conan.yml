@@ -10,17 +10,19 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            preset: conan-release
+            preset: release
           - os: windows-latest
-            preset: conan-default-release
+            preset: release
           - os: macos-latest
-            preset: conan-release
+            preset: release
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -39,15 +41,12 @@ jobs:
           key: conan-${{ runner.os }}-${{ hashFiles('**/conanfile.*') }}
           restore-keys: |
             conan-${{ runner.os }}-
-
-      - name: Detect Conan profile
-        run: conan profile detect --force
-
-      - name: Install dependencies
-        run: conan install . --build=missing
-
+              
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }} --output-on-failure
