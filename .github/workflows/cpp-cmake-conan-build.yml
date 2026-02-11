@@ -19,6 +19,16 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      # ubuntu-latest does not fully support C++23 (as of 02-10-2026)
+      # Install GCC 15 to resolve that
+      - name: Install GCC 15                                                                              
+        if: runner.os == 'Linux'                                                                          
+        run: |                                                                                            
+          sudo apt-get update                                                                             
+          sudo apt-get install -y gcc-15 g++-15                                                           
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-15 100                         
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-15 100
+
       - name: Checkout source
         uses: actions/checkout@v4
         with:
