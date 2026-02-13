@@ -11,10 +11,10 @@ jobs:
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
 
       - name: Configure
-        run: cmake --preset release
+        run: cmake --preset clang-tidy
 
       - name: Install clang-tidy
         run: sudo apt-get install -y clang-tidy
 
       - name: Run clang-tidy
-        run: run-clang-tidy -p build/release -warnings-as-errors='*'
+        run: run-clang-tidy -p build/clang-tidy -warnings-as-errors='*'
