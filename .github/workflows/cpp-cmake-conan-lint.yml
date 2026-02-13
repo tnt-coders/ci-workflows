@@ -1,5 +1,4 @@
-name: C++ CMake Conan Clang-Tidy
-
+name: C++ CMake Conan Lint
 on:
   workflow_call:
 
@@ -10,8 +9,9 @@ jobs:
     steps:
       - name: Setup
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
-        with:
-          preset: release
+
+      - name: Configure
+        run: cmake --preset release
 
       - name: Install clang-tidy
         run: sudo apt-get install -y clang-tidy
