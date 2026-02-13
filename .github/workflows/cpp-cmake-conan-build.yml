@@ -19,47 +19,10 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      # ubuntu-latest does not fully support C++23 (as of 02-10-2026)
-      # Install GCC 14 to resolve that
-      - name: Install GCC 14
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-14 g++-14
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-
-      # The Ninja generator defaults to using mingw unless we setup MSVC explicitly
-      # MSVC seems to be more up to date and consistent so it is better for C++23 support
-      - name: Setup MSVC
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Checkout source
-        uses: actions/checkout@v4
+      - name: Setup
+        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
         with:
-          submodules: recursive
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - name: Install Conan
-        run: |
-          python -m pip install --upgrade pip
-          pip install "conan>=2.24,<3"
-
-      - name: Cache Conan packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.conan2/p
-          key: conan-${{ runner.os }}-${{ hashFiles('**/conanfile.*') }}
-          restore-keys: |
-            conan-${{ runner.os }}-
-              
-      - name: Configure
-        run: cmake --preset ${{ matrix.preset }}
+          preset: ${{ matrix.preset }}
 
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
