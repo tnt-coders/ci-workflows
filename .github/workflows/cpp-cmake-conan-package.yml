@@ -11,5 +11,8 @@ jobs:
       - name: Setup
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
 
+      - name: Detect Conan profile
+        run: conan profile detect
+
       - name: Create package
         run: conan create .
