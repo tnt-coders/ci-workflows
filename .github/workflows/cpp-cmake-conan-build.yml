@@ -21,8 +21,6 @@ jobs:
     steps:
       - name: Setup
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
-        with:
-          preset: ${{ matrix.preset }}
 
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
