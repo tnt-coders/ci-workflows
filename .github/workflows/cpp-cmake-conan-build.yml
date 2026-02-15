@@ -24,7 +24,6 @@ jobs:
 
       # clang-tidy must be installed before the configure step to trigger generation of compile_commands.json
       - name: Install clang-tidy
-        if: runner.os == 'Linux'
         run: sudo apt-get install -y clang-tidy
 
       - name: Configure
@@ -34,7 +33,7 @@ jobs:
         run: cmake --build --preset ${{ matrix.preset }}
 
       - name: Lint
-        if: runner.os == 'Linux' && hashFiles('.clang-tidy') != ''
+        if: hashFiles('.clang-tidy') != ''
         run: cmake --build build/${{ matrix.preset }} --target clang-tidy
 
       - name: Test
