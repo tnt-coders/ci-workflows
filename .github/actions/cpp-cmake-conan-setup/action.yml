@@ -5,23 +5,16 @@ runs:
   using: composite
 
   steps:
-    # ubuntu-latest does not fully support C++23 (as of 02-10-2026)
-    # Install GCC 14 to resolve that
-    - name: Install GCC 14
+    # Install Linux prerequisites
+    # GCC 14 is needed because ubuntu-latest does not fully support C++23 (as of 02-10-2026)
+    - name: Install prerequisites (Linux)
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        sudo apt-get install -y gcc-14 g++-14
+        sudo apt-get update
+        sudo apt-get install -y gcc-14 g++-14 clang-tidy
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-
-    # Linux
-    - name: Install clang-tidy (Linux)
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        sudo apt-get install -y clang-tidy
-        clang-tidy --version
 
     # macOS
     - name: Install clang-tidy (macOS)
@@ -31,7 +24,6 @@ runs:
         brew install llvm
         LLVM_PREFIX="$(brew --prefix llvm)"
         echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
-        clang-tidy --version
 
     # The Ninja generator defaults to using mingw unless we setup MSVC explicitly
     # MSVC seems to be more up to date and consistent so it is better for C++23 support
