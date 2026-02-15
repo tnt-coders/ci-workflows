@@ -34,7 +34,7 @@ jobs:
         run: cmake --build --preset ${{ matrix.preset }}
 
       - name: Lint
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && hashFiles('.clang-tidy') != ''
         run: cmake --build build/${{ matrix.preset }} --target clang-tidy
 
       - name: Test
