@@ -22,10 +22,6 @@ jobs:
       - name: Setup
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
 
-      # clang-tidy must be installed before the configure step to trigger generation of compile_commands.json
-      - name: Install clang-tidy
-        run: sudo apt-get install -y clang-tidy
-
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 
