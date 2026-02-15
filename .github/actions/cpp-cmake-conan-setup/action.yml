@@ -11,21 +11,26 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-14 g++-14 clang-tidy
+        sudo apt-get install -y gcc-14 g++-14
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
 
-    - name: Install clang-tidy
+    # Linux
+    - name: Install clang-tidy (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get install -y clang-tidy
+        clang-tidy --version
+
+    # macOS
+    - name: Install clang-tidy (macOS)
       if: runner.os == 'macOS'
       shell: bash
       run: |
         brew install llvm
-        if [ -d "/opt/homebrew/opt/llvm/bin" ]; then
-          echo "/opt/homebrew/opt/llvm/bin" >> "$GITHUB_PATH"
-        else
-          echo "/usr/local/opt/llvm/bin" >> "$GITHUB_PATH"
-        fi
+        LLVM_PREFIX="$(brew --prefix llvm)"
+        echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
+        clang-tidy --version
 
     # The Ninja generator defaults to using mingw unless we setup MSVC explicitly
     # MSVC seems to be more up to date and consistent so it is better for C++23 support
