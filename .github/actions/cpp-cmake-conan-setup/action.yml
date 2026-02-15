@@ -18,6 +18,7 @@ runs:
     # Linux
     - name: Install clang-tidy (Linux)
       if: runner.os == 'Linux'
+      shell: bash
       run: |
         sudo apt-get install -y clang-tidy
         clang-tidy --version
