@@ -1,4 +1,4 @@
-name: CMake C++ Conan Docs
+name: C++ CMake Conan Docs
 
 on:
   workflow_call:

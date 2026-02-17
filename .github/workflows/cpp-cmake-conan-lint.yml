@@ -1,10 +1,10 @@
-name: C++ CMake Conan Package
+name: C++ CMake Conan Lint
 
 on:
   workflow_call:
 
 jobs:
-  package:
+  lint:
     strategy:
       fail-fast: false
       matrix:
@@ -16,8 +16,8 @@ jobs:
       - name: Setup
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
 
-      - name: Detect Conan profile
-        run: conan profile detect
+      - name: Configure
+        run: cmake --preset release
 
-      - name: Create package
-        run: conan create . --version=test
+      - name: Clang-Tidy
+        run: cmake --build --preset release --target clang-tidy

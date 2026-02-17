@@ -8,13 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            preset: release
-          - os: windows-latest
-            preset: release
-          - os: macos-latest
-            preset: release
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -23,14 +17,10 @@ jobs:
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
 
       - name: Configure
-        run: cmake --preset ${{ matrix.preset }}
+        run: cmake --preset release
 
       - name: Build
-        run: cmake --build --preset ${{ matrix.preset }}
-
-      - name: Lint
-        if: hashFiles('.clang-tidy') != ''
-        run: cmake --build build/${{ matrix.preset }} --target clang-tidy
+        run: cmake --build --preset release
 
       - name: Test
-        run: ctest --preset ${{ matrix.preset }} --output-on-failure
+        run: ctest --preset release --output-on-failure
