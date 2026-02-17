@@ -1,0 +1,61 @@
+name: CMake C++ Conan Docs
+
+on:
+  workflow_call:
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup
+        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
+
+      - name: Install docs tools (Linux)
+        shell: bash
+        run: |
+          sudo apt-get install -y doxygen graphviz
+
+      - name: Configure
+        run: cmake --preset release
+
+      - name: Build docs
+        run: cmake --build --preset release --target docs
+
+      - name: Verify docs output
+        shell: bash
+        run: |
+          test -d build/release/docs/html
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: doxygen-html
+          path: build/release/docs/html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/release/docs/html
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: docs
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
