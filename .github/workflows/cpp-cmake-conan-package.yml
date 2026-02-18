@@ -20,4 +20,4 @@ jobs:
         run: conan profile detect
 
       - name: Create package
-        run: conan create . --version=test
+        run: conan create . --version=test --build=missing
