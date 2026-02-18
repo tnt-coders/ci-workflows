@@ -38,7 +38,7 @@ jobs:
         with:
           path: build/release/docs/html
 
-  deploy:
+  publish:
     if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: docs
     runs-on: ubuntu-latest
@@ -53,9 +53,9 @@ jobs:
 
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.publish.outputs.page_url }}
 
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - name: Publish to GitHub Pages
+        id: publish
         uses: actions/deploy-pages@v4
