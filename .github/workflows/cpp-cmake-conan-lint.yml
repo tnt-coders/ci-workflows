@@ -19,5 +19,5 @@ jobs:
       - name: Configure
         run: cmake --preset release
 
-      - name: Clang-Tidy
+      - name: Lint
         run: cmake --build --preset release --target clang-tidy
