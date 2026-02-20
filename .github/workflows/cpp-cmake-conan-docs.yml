@@ -38,9 +38,44 @@ jobs:
         with:
           path: build/release/docs/html
 
-  publish:
-    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+  check-publish:
     needs: docs
+    runs-on: ubuntu-latest
+
+    outputs:
+      publish: ${{ steps.check-publish.outputs.publish }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check if docs should publish
+        id: check-publish
+        shell: bash
+        run: |
+          LATEST=$(git tag --list 'v*' | sort -V | grep -vE '-' | tail -1)
+          if [[ -z "$LATEST" ]]; then
+            # No stable tags — publish on master push
+            if [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # Stable tags exist — only publish if this push is the latest stable tag
+            if [[ "$GITHUB_REF" == "refs/tags/v$LATEST" ]]; then
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  publish:
+    if: needs.check-publish.outputs.publish == 'true'
+    needs: [docs, check-publish]
     runs-on: ubuntu-latest
 
     concurrency:
