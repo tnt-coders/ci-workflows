@@ -66,7 +66,7 @@ jobs:
             fi
           else
             # Stable tags exist — only publish if this push is the latest stable tag
-            if [[ "$GITHUB_REF" == "refs/tags/v$LATEST" ]]; then
+            if [[ "$GITHUB_REF" == "refs/tags/$LATEST" ]]; then
               echo "publish=true" >> "$GITHUB_OUTPUT"
             else
               echo "publish=false" >> "$GITHUB_OUTPUT"
