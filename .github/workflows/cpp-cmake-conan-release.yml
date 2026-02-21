@@ -4,9 +4,65 @@ on:
   workflow_call:
 
 jobs:
-  release:
+  check-publish:
     runs-on: ubuntu-latest
+    outputs:
+      publish-release: ${{ steps.check.outputs.publish-release }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+      tag: ${{ steps.check.outputs.tag }}
+      publish-docs: ${{ steps.check-docs.outputs.publish-docs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
+      - name: Check release conditions
+        id: check
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
+            echo "publish-release=true" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "tag=dev-build" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" =~ ^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?)$ ]]; then
+            echo "publish-release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            if [[ "${BASH_REMATCH[2]}" ]]; then
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "publish-release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if docs should publish
+        id: check-docs
+        shell: bash
+        run: |
+          LATEST=$(git tag --list 'v*' | sort -V | awk '!/-/' | tail -1)
+          if [[ -z "$LATEST" ]]; then
+            # No stable tags — publish on master push
+            if [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
+              echo "publish-docs=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish-docs=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # Stable tags exist — only publish if this push is the latest stable tag
+            if [[ "$GITHUB_REF" == "refs/tags/$LATEST" ]]; then
+              echo "publish-docs=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish-docs=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  publish-release:
+    if: needs.check-publish.outputs.publish-release == 'true'
+    needs: check-publish
+    runs-on: ubuntu-latest
     steps:
       - name: Download all package artifacts
         uses: actions/download-artifact@v4
@@ -15,26 +71,66 @@ jobs:
           pattern: packages-*
           merge-multiple: true
 
+      - name: Delete existing draft release (if any)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          tag="${{ needs.check-publish.outputs.tag }}"
+          if [[ "$tag" == "dev-build" ]]; then
+            # Dev builds: always clean up old release and tag
+            gh release delete "$tag" --yes 2>/dev/null || true
+            gh api "repos/${{ github.repository }}/git/refs/tags/$tag" -X DELETE 2>/dev/null || true
+          else
+            # Tagged releases: only delete if existing release is a draft
+            if gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null | grep -q true; then
+              gh release delete "$tag" --yes
+            fi
+          fi
+
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+        shell: bash
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            tag="${{ github.ref_name }}"
-            gh release create "$tag" \
-              --draft \
-              --generate-notes \
-              --title "$tag" \
-              packages/*
-          else
-            gh release delete "dev-build" --yes 2>/dev/null || true
-            gh api "repos/${{ github.repository }}/git/refs/tags/dev-build" -X DELETE 2>/dev/null || true
+          tag="${{ needs.check-publish.outputs.tag }}"
+          prerelease="${{ needs.check-publish.outputs.prerelease }}"
 
-            gh release create "dev-build" \
-              --draft \
-              --title "Development Build" \
-              --notes "Automated development build from commit ${{ github.sha }}" \
-              --target "${{ github.sha }}" \
-              packages/*
+          flags=(--draft --title "$tag")
+
+          if [[ "$tag" == "dev-build" ]]; then
+            flags+=(--notes "Automated development build from commit ${{ github.sha }}")
+            flags+=(--target "${{ github.sha }}")
+          else
+            flags+=(--generate-notes)
           fi
+
+          if [[ "$prerelease" == "true" ]]; then
+            flags+=(--prerelease)
+          fi
+
+          gh release create "$tag" "${flags[@]}" packages/*
+
+  publish-docs:
+    if: needs.check-publish.outputs.publish-docs == 'true'
+    needs: check-publish
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+
+    steps:
+      - name: Publish to GitHub Pages
+        id: publish
+        uses: actions/deploy-pages@v4
