@@ -24,3 +24,17 @@ jobs:
 
       - name: Test
         run: ctest --preset release --output-on-failure
+
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: choco install nsis -y
+
+      - name: Package
+        run: cpack --config build/release/CPackConfig.cmake -B build/release/packages
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ runner.os }}
+          path: build/release/packages/*

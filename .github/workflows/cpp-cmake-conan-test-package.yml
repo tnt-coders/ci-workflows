@@ -1,4 +1,4 @@
-name: C++ CMake Conan Package
+name: C++ CMake Conan Test Package
 
 on:
   workflow_call:
