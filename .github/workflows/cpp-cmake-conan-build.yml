@@ -37,4 +37,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ runner.os }}
-          path: build/release/packages/*
+          path: |
+            build/release/packages/*
+            !build/release/packages/_CPack_Packages
