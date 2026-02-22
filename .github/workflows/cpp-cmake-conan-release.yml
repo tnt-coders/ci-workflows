@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Check release conditions
+      - name: Check if release should publish
         id: check
         shell: bash
         run: |
@@ -89,7 +89,7 @@ jobs:
             fi
           fi
 
-      - name: Create release
+      - name: Draft new release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
