@@ -27,8 +27,23 @@ jobs:
 
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
-        shell: bash
-        run: choco install nsis -y
+        shell: pwsh
+        run: |
+          if (Get-Command makensis -ErrorAction SilentlyContinue) {
+            Write-Host "NSIS already available"
+            exit 0
+          }
+
+          winget install -e --id NSIS.NSIS --accept-package-agreements --accept-source-agreements --silent
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "winget failed to install NSIS"
+            exit $LASTEXITCODE
+          }
+
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            Write-Error "NSIS installed but makensis not found on PATH"
+            exit 1
+          }
 
       - name: Package
         run: cpack --config build/release/CPackConfig.cmake -B build/release/packages
