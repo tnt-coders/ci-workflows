@@ -33,10 +33,12 @@ jobs:
       - name: Package
         run: cpack --config build/release/CPackConfig.cmake -B build/release/packages
 
+      - name: Clean up CPack working directory
+        shell: bash
+        run: rm -rf build/release/packages/_CPack_Packages
+
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ runner.os }}
-          path: |
-            build/release/packages/*
-            !build/release/packages/_CPack_Packages
+          path: build/release/packages/
