@@ -25,8 +25,4 @@ jobs:
         run: conan profile detect
 
       - name: Create package
-        run: >-
-          conan create . --version=test --build=missing
-          --profile:host=default --profile:host=./conan_host_profile
-          --profile:build=default
-          -s build_type=Release
+        run: conan create . --version=test --build=missing --profile:host=./conan_host_profile
