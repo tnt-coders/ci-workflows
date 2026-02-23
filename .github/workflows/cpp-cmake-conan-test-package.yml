@@ -16,8 +16,10 @@ jobs:
       - name: Setup
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
 
-      - name: Detect Conan profile
-        run: conan profile detect
+      - name: Download Conan host profile
+        uses: actions/download-artifact@v4
+        with:
+          name: conan-profile-${{ runner.os }}
 
       - name: Create package
-        run: conan create . --version=test --build=missing
+        run: conan create . --version=test --build=missing --profile=./conan_host_profile

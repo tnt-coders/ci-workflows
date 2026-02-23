@@ -63,6 +63,12 @@ jobs:
         shell: bash
         run: rm -rf build/release/packages/_CPack_Packages
 
+      - name: Upload Conan host profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: conan-profile-${{ runner.os }}
+          path: build/release/conan_host_profile
+
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
