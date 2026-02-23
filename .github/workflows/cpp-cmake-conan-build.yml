@@ -51,7 +51,13 @@ jobs:
           }
 
       - name: Package
-        run: cpack --config build/release/CPackConfig.cmake -B build/release/packages
+        shell: bash
+        run: |
+          if [[ -f build/release/CPackConfig.cmake ]]; then
+            cpack --config build/release/CPackConfig.cmake -B build/release/packages
+          else
+            echo "No CPackConfig.cmake found (no runtime targets); skipping packaging."
+          fi
 
       - name: Clean up CPack working directory
         shell: bash
@@ -62,3 +68,4 @@ jobs:
         with:
           name: packages-${{ runner.os }}
           path: build/release/packages/
+          if-no-files-found: ignore
