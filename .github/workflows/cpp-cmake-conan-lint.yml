@@ -25,8 +25,8 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install llvm
-          LLVM_PREFIX="$(brew --prefix llvm)"
+          brew install llvm@21
+          LLVM_PREFIX="$(brew --prefix llvm@21)"
           echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
 
       - name: Configure
