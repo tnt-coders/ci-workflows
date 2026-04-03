@@ -5,6 +5,8 @@ on:
 
 jobs:
   package:
+    env:
+      CONAN_HOME: ${{ github.workspace }}/build/release/.conan2
     strategy:
       fail-fast: false
       matrix:
