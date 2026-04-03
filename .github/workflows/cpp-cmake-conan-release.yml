@@ -3,11 +3,11 @@ name: C++ CMake Conan Release
 on:
   workflow_call:
     inputs:
-      attach-package-artifacts:
+      include-package-artifacts:
         description: Attach uploaded package artifacts to the release when available
         required: false
         type: boolean
-        default: true
+        default: false
 
 jobs:
   check-publish:
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check package artifacts
-        if: inputs.attach-package-artifacts
+        if: inputs.include-package-artifacts
         id: artifacts
         uses: actions/github-script@v7
         with:
@@ -83,7 +83,7 @@ jobs:
             core.setOutput("found", found ? "true" : "false");
 
       - name: Download all package artifacts
-        if: inputs.attach-package-artifacts && steps.artifacts.outputs.found == 'true'
+        if: inputs.include-package-artifacts && steps.artifacts.outputs.found == 'true'
         uses: actions/download-artifact@v4
         with:
           path: packages
@@ -112,7 +112,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          HAS_PACKAGE_ARTIFACTS: ${{ inputs.attach-package-artifacts && steps.artifacts.outputs.found == 'true' }}
+          HAS_PACKAGE_ARTIFACTS: ${{ inputs.include-package-artifacts && steps.artifacts.outputs.found == 'true' }}
         shell: bash
         run: |
           tag="${{ needs.check-publish.outputs.tag }}"
