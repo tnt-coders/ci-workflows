@@ -97,7 +97,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          HAS_PACKAGE_ARTIFACTS: ${{ steps.artifacts.outcome == 'success' }}
         shell: bash
         run: |
           tag="${{ needs.check-publish.outputs.tag }}"
@@ -116,7 +115,7 @@ jobs:
             flags+=(--prerelease)
           fi
 
-          if [[ "$HAS_PACKAGE_ARTIFACTS" == "true" ]]; then
+          if compgen -G "packages/*" > /dev/null 2>&1; then
             gh release create "$tag" "${flags[@]}" packages/*
           else
             echo "No runtime package artifacts found; creating release with source only."
