@@ -63,6 +63,20 @@ jobs:
         shell: bash
         run: rm -rf build/release/packages/_CPack_Packages
 
+      - name: Detect package outputs
+        id: package_outputs
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(build/release/packages/*)
+          if (( ${#files[@]} > 0 )); then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            mkdir -p build/release/package-marker
+            echo "packages-present" > build/release/package-marker/present.txt
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload Conan host profile
         uses: actions/upload-artifact@v4
         with:
@@ -70,8 +84,15 @@ jobs:
           path: build/release/conan_host_profile
 
       - name: Upload packages
+        if: steps.package_outputs.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ runner.os }}
           path: build/release/packages/
-          if-no-files-found: ignore
+
+      - name: Upload package marker
+        if: steps.package_outputs.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-marker-${{ runner.os }}
+          path: build/release/package-marker/present.txt
