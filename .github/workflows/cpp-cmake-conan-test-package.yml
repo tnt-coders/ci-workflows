@@ -2,6 +2,10 @@ name: C++ CMake Conan Test Package
 
 on:
   workflow_call:
+    inputs:
+      install-juce-dependencies:
+        type: boolean
+        default: false
 
 jobs:
   package:
@@ -17,6 +21,8 @@ jobs:
     steps:
       - name: Setup
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
+        with:
+          install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
 
       - name: Download Conan host profile
         uses: actions/download-artifact@v4

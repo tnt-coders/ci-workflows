@@ -2,6 +2,10 @@ name: C++ CMake Conan Lint
 
 on:
   workflow_call:
+    inputs:
+      install-juce-dependencies:
+        type: boolean
+        default: false
 
 jobs:
   lint:
@@ -15,6 +19,8 @@ jobs:
     steps:
       - name: Setup
         uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
+        with:
+          install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
 
       - name: Install clang-tidy (Linux)
         if: runner.os == 'Linux'
