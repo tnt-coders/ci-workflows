@@ -5,14 +5,19 @@ runs:
   using: composite
 
   steps:
-    # Install Linux prerequisites
-    # GCC 14 is needed because ubuntu-latest does not fully support C++23 (as of 02-10-2026)
+    # Install Linux prerequisites.
+    # GCC 14 is needed because ubuntu-latest does not fully support C++23 (as of 02-10-2026).
+    # The X11/GL/ALSA/FreeType packages are required by JUCE-based GUI projects at configure time
+    # (JUCE's juceaide build tool includes X11 headers on Linux unconditionally).
     - name: Install prerequisites (Linux)
       if: runner.os == 'Linux'
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc-14 g++-14
+        sudo apt-get install -y \
+          gcc-14 g++-14 \
+          libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+          libfreetype6-dev libasound2-dev libgl1-mesa-dev
         sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
         sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
 
