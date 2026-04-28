@@ -7,6 +7,10 @@ on:
         type: boolean
         default: false
 
+env:
+  LLVM_VERSION: "21"
+  LLVM_WINDOWS_VERSION: "21.1.8"
+
 jobs:
   lint:
     strategy:
@@ -25,15 +29,48 @@ jobs:
       - name: Install clang-tidy (Linux)
         if: runner.os == 'Linux'
         shell: bash
-        run: sudo apt-get install -y clang-tidy
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-tidy-$LLVM_VERSION" "clang-tools-$LLVM_VERSION"
+          echo "/usr/lib/llvm-$LLVM_VERSION/bin" >> "$GITHUB_PATH"
 
       - name: Install clang-tidy (macOS)
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install llvm@21
-          LLVM_PREFIX="$(brew --prefix llvm@21)"
+          brew install "llvm@$LLVM_VERSION"
+          LLVM_PREFIX="$(brew --prefix "llvm@$LLVM_VERSION")"
           echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
+
+      - name: Install clang-tidy (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installed = $false
+          foreach ($attempt in 1..3) {
+            Write-Host "Installing LLVM via Chocolatey (attempt $attempt of 3)..."
+            choco upgrade llvm --version=$env:LLVM_WINDOWS_VERSION --allow-downgrade -y --no-progress
+            if ($LASTEXITCODE -eq 0) {
+              $installed = $true
+              break
+            }
+            Start-Sleep -Seconds (5 * $attempt)
+          }
+
+          if (-not $installed) {
+            Write-Error "Chocolatey failed to install LLVM after 3 attempts"
+            exit 1
+          }
+
+          "$env:SystemDrive\Program Files\LLVM\bin" >> $env:GITHUB_PATH
+
+      - name: Verify clang-tidy
+        shell: bash
+        run: |
+          clang-tidy --version
+          command -v run-clang-tidy
 
       - name: Configure
         run: cmake --preset release
