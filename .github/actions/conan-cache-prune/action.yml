@@ -1,0 +1,12 @@
+name: Conan Cache Prune
+description: >
+  Prunes source/build/download temp folders from the Conan cache in a post step, so the post-job
+  cache save archives usable packages only. Invoke this AFTER the actions/cache step: post steps
+  run in reverse invocation order, which is what places this prune before the cache save.
+  Composite actions cannot declare post steps of their own, hence this minimal Node action.
+
+runs:
+  using: node20
+  main: index.js
+  post: index.js
+  post-if: success()

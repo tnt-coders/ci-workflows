@@ -7,6 +7,14 @@ inputs:
       When true, install runner-OS-specific prerequisites required by JUCE-based projects.
       Currently installs Linux packages only; macOS and Windows are reserved for future use.
     default: 'false'
+  conan-home:
+    description: >
+      Workspace-relative Conan home the CI preset uses. This cannot be discovered at
+      cache-restore time (the CMake presets only set CONAN_HOME while CMake runs, and the cache
+      must be restored before configure), so it is declared here once and exported as CONAN_HOME
+      for every later step; the value must match what the project's CI preset sets (the shared
+      project-config presets use build/release/.conan2 for the release preset).
+    default: 'build/release/.conan2'
 
 runs:
   using: composite
@@ -72,10 +80,77 @@ runs:
         python -m pip install --upgrade pip
         pip install "conan>=2.24,<3"
 
+    # Single source of truth for the Conan cache location: every later step here (cache path,
+    # integrity check, prune) and any conan invocation in the calling workflow derives from the
+    # exported CONAN_HOME instead of repeating the path. The CMake presets set the identical
+    # value during configure, so the two never disagree unless a project diverges from the
+    # shared preset convention — in which case it overrides the conan-home input. Backslashes
+    # are normalized to forward slashes so the same value is safe in bash, node, and Windows
+    # tooling alike. The step output duplicates the value because later ${{ }} expressions use
+    # step outputs (unambiguously supported inside composites), while $CONAN_HOME serves the
+    # process-env consumers.
+    - name: Resolve Conan home
+      id: conan-home
+      shell: bash
+      run: |
+        conan_home="$GITHUB_WORKSPACE/${{ inputs.conan-home }}"
+        conan_home="${conan_home//\\//}"
+        echo "CONAN_HOME=$conan_home" >> "$GITHUB_ENV"
+        echo "path=$conan_home" >> "$GITHUB_OUTPUT"
+
+    # The runner image version stands in for the toolchain version (MSVC/GCC/Clang come from the
+    # image), and the Conan version floats via pip, so both must participate in the cache key:
+    # with neither, an exact-key hit after a toolset or Conan bump would pin a stale cache forever
+    # (actions/cache never re-saves on an exact hit). Machine env vars like ImageVersion are not
+    # visible to the ${{ env }} expression context, so capture them through a step output.
+    - name: Collect Conan cache key components
+      id: conan-cache-key
+      shell: bash
+      run: |
+        echo "conan-version=$(conan --version | tr -dc '0-9.')" >> "$GITHUB_OUTPUT"
+        echo "image-version=${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+    # Cache invariant: the save must only ever run through actions/cache's post step, which runs
+    # on job success. Never add save-always or an unconditional explicit save step — a job that
+    # died mid-`conan install` leaves a dirty package cache (half-written folders that fail later
+    # runs with FileNotFoundError on `s.dirty` markers), and success-only saving is what keeps
+    # that corruption from ever persisting into the shared cache.
+    #
+    # Key inputs: any conanfile (projects keep them at the root, but recipe test fixtures also
+    # match — churn from those is wasteful but safe) plus an optional local-recipes-index checkout
+    # (conan-recipes/), whose recipe revisions genuinely change dependency resolution. The broad
+    # restore-key fallback can seed from an older image/Conan cache; mismatched packages just
+    # rebuild, and the integrity check below guards the coherence of whatever was restored.
     - name: Cache Conan packages
+      id: conan-cache
       uses: actions/cache@v4
       with:
-        path: build/release/.conan2/p
-        key: conan-${{ runner.os }}-${{ hashFiles('**/conanfile.*') }}
+        path: ${{ steps.conan-home.outputs.path }}/p
+        key: conan-${{ runner.os }}-img${{ steps.conan-cache-key.outputs.image-version }}-conan${{ steps.conan-cache-key.outputs.conan-version }}-${{ hashFiles('**/conanfile.*', 'conan-recipes/**') }}
         restore-keys: |
+          conan-${{ runner.os }}-img${{ steps.conan-cache-key.outputs.image-version }}-conan${{ steps.conan-cache-key.outputs.conan-version }}-
           conan-${{ runner.os }}-
+
+    # Converts any residual cache corruption into a slow-but-green run (wipe and rebuild from
+    # source) instead of a hard failure deep inside the build. The Conan cache database lives
+    # inside p/, so the exported CONAN_HOME is sufficient to check the restored tree. Skipped on
+    # an exact-key hit: that cache was saved by a successful identical-config job (the same trust
+    # level as before this check existed), and hashing a large warm cache in every job is not
+    # free — only fallback restores carry the extra suspicion.
+    - name: Verify restored Conan cache integrity
+      if: steps.conan-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        if [ -d "$CONAN_HOME/p" ]; then
+          if ! conan cache check-integrity "*"; then
+            echo "Restored Conan cache failed integrity check; discarding it for this run."
+            rm -rf "$CONAN_HOME/p"
+          fi
+        fi
+
+    # Registers the prune that runs right before the cache save: post steps execute in reverse
+    # invocation order, so invoking this after the cache step places its post (conan cache clean)
+    # ahead of actions/cache's post-job save. Fully-qualified self-reference because relative
+    # `uses:` paths inside a composite resolve against the consumer's checkout, not this repo.
+    - name: Register Conan cache prune before save
+      uses: tnt-coders/ci-workflows/.github/actions/conan-cache-prune@master
