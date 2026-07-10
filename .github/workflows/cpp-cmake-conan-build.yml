@@ -56,18 +56,41 @@ jobs:
             exit 1
           }
 
+      # Packages stage under a short runner-temp base instead of the deep build tree: NSIS's
+      # makensis carries no longPathAware manifest, so every staged file path must stay under
+      # MAX_PATH (260) on Windows, and generated docs carry filenames long enough to overflow
+      # from a deep base. The pre-check turns future growth into a readable failure here, and a
+      # packaging failure prints NSISOutput.log so the real error is never hidden.
       - name: Package
         shell: bash
         run: |
-          if [[ -f build/release/CPackConfig.cmake ]]; then
-            cpack --config build/release/CPackConfig.cmake -B build/release/packages
-          else
+          if [[ ! -f build/release/CPackConfig.cmake ]]; then
             echo "No CPackConfig.cmake found (no runtime targets); skipping packaging."
+            exit 0
+          fi
+
+          package_dir="${RUNNER_TEMP//\\//}/pkg"
+
+          # ~110 chars of the 260 budget go to the staging skeleton under the short base
+          # (installer name, component, share/<project>/docs dirs); fail with headroom left.
+          if [[ -d build/release/docs ]]; then
+            longest=$(find build/release/docs -type f | sed 's|.*/||' | awk '{ print length }' | sort -rn | head -1)
+            if (( longest > 145 )); then
+              echo "error: longest generated docs filename is ${longest} chars; staged NSIS" \
+                   "paths would exceed MAX_PATH (makensis is not long-path aware). Shorten" \
+                   "generated names or stop installing the docs tree."
+              exit 1
+            fi
+          fi
+
+          if ! cpack --config build/release/CPackConfig.cmake -B "${package_dir}"; then
+            find "${package_dir}" -name 'NSISOutput.log' -exec echo '--- {} ---' \; -exec cat '{}' \; || true
+            exit 1
           fi
 
       - name: Clean up CPack working directory
         shell: bash
-        run: rm -rf build/release/packages/_CPack_Packages
+        run: rm -rf "${RUNNER_TEMP//\\//}/pkg/_CPack_Packages"
 
       - name: Upload Conan host profile
         uses: actions/upload-artifact@v4
@@ -79,5 +102,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ runner.os }}
-          path: build/release/packages/
+          path: ${{ runner.temp }}/pkg/
           if-no-files-found: ignore
