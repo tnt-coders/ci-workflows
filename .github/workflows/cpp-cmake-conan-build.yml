@@ -1,20 +1,57 @@
 name: C++ CMake Conan Build
 
+# The full health pipeline for ONE platform: pre-commit hygiene gates everything, build+test and
+# lint run in parallel behind it, and on pushes the release job attaches this platform's packages
+# to the release shared by the project's per-platform caller workflows.
+#
+# Projects declare one tiny caller workflow per OS, each invoking this with a different `os` —
+# that gives every platform its own README badge, and a future Windows-only project simply
+# declares a single caller. Platforms know nothing about each other: each independently upserts
+# its installers into the shared draft release as it finishes (see the release job below).
+
 on:
   workflow_call:
     inputs:
+      # Runner image for this platform (e.g. windows-latest).
+      os:
+        type: string
+        required: true
+      # Every pipeline stage below is opt-in (default false) so a caller workflow reads as the
+      # project's complete CI manifest and new stages never silently change existing consumers.
       install-juce-dependencies:
+        type: boolean
+        default: false
+      # Run clang-tidy as part of this platform's health. Off only for projects with no C++
+      # lint surface (e.g. pure CMake tooling).
+      lint:
+        type: boolean
+        default: false
+      # Validate `conan create` of this repo's package after the build. On for library projects
+      # consumed through Conan.
+      test-package:
+        type: boolean
+        default: false
+      # Publish the shared GitHub release: dev-build on master pushes, versioned on v* tags.
+      # Off for projects that want build health without automatic release publication.
+      release:
+        type: boolean
+        default: false
+      # Whether this platform packages installers for the release; without it the project
+      # publishes source-only releases. Declaration and reality must agree in BOTH directions —
+      # the release job fails if packages are declared but missing, and also if the run produced
+      # package artifacts that no one declared (so forgetting this flag cannot silently publish
+      # thinner releases).
+      package:
         type: boolean
         default: false
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+  pre-commit:
+    uses: ./.github/workflows/pre-commit.yml
 
-    runs-on: ${{ matrix.os }}
+  build:
+    needs: pre-commit
+    runs-on: ${{ inputs.os }}
 
     steps:
       - name: Setup
@@ -104,3 +141,220 @@ jobs:
           name: packages-${{ runner.os }}
           path: ${{ runner.temp }}/pkg/
           if-no-files-found: ignore
+
+  lint:
+    if: inputs.lint
+    needs: pre-commit
+    runs-on: ${{ inputs.os }}
+
+    env:
+      LLVM_VERSION: "21"
+
+    steps:
+      - name: Setup
+        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
+        with:
+          install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
+
+      - name: Install clang-tidy (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "$LLVM_VERSION"
+          sudo apt-get install -y "clang-tidy-$LLVM_VERSION" "clang-tools-$LLVM_VERSION"
+          echo "/usr/lib/llvm-$LLVM_VERSION/bin" >> "$GITHUB_PATH"
+
+      - name: Install clang-tidy (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install "llvm@$LLVM_VERSION"
+          LLVM_PREFIX="$(brew --prefix "llvm@$LLVM_VERSION")"
+          echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
+
+      - name: Verify clang-tidy
+        shell: bash
+        run: |
+          clang-tidy --version
+          command -v run-clang-tidy
+
+      - name: Configure
+        run: cmake --preset release
+
+      - name: Lint
+        run: cmake --build --preset release --target clang-tidy
+
+  test-package:
+    if: inputs.test-package
+    needs: build
+    # CONAN_HOME is exported by the setup action, so conan profile detect / conan create below
+    # already target the cached Conan home without a job-level duplicate of the path.
+    runs-on: ${{ inputs.os }}
+
+    steps:
+      - name: Setup
+        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@master
+        with:
+          install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
+
+      - name: Download Conan host profile
+        uses: actions/download-artifact@v4
+        with:
+          name: conan-profile-${{ runner.os }}
+
+      - name: Detect default profile
+        run: conan profile detect
+
+      - name: Create package
+        run: conan create . --version=test --build=missing --profile:host=./conan_host_profile
+
+  # Attaches this platform's packages to the DRAFT release shared by the project's per-platform
+  # workflows, so each OS gets its own badge while every push still yields a single GitHub
+  # release holding every platform's installers.
+  #
+  # The platforms are deliberately uncoordinated: releases stay drafts and nothing here decides
+  # "all platforms are in" — a human publishes tagged releases after review (and dev-build
+  # drafts simply track master for maintainers). Asset names are distinct per platform, so each
+  # build independently upserts its own files as it finishes. The two races that remain are
+  # handled locally with a retry loop:
+  #   - Draft releases do not reserve tag names, so simultaneous first-arrivals can create
+  #     duplicate drafts; each pass keeps the oldest and deletes the extras.
+  #   - A dev-build draft left by an earlier commit is superseded wholesale (delete + recreate),
+  #     detected by comparing the release's target commitish to this run's SHA. Caller-side
+  #     cancel-in-progress concurrency keeps stale runs from resurrecting an old SHA.
+  #
+  # `!cancelled()` disables the implicit all-needs-succeeded gate so that lint/test-package jobs
+  # skipped BY CONFIGURATION don't skip the release; the explicit result checks then re-impose
+  # "everything that ran must have passed" (a config-skipped job reports 'skipped', which passes
+  # the != 'failure' checks, while a job skipped because pre-commit failed drags build with it).
+  release:
+    if: >-
+      inputs.release && github.event_name == 'push' && !cancelled() &&
+      needs.build.result == 'success' &&
+      needs.lint.result != 'failure' &&
+      needs.test-package.result != 'failure'
+    needs: [build, lint, test-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check if release should publish
+        id: check
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
+            echo "publish-release=true" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "tag=dev-build" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" =~ ^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?)$ ]]; then
+            echo "publish-release=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            if [[ "${BASH_REMATCH[2]}" ]]; then
+              echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "publish-release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download package artifacts from this run
+        if: steps.check.outputs.publish-release == 'true' && inputs.package
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/packages
+          pattern: packages-*
+          merge-multiple: true
+
+      - name: Attach assets to the shared release
+        if: steps.check.outputs.publish-release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WITH_PACKAGE: ${{ inputs.package }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.check.outputs.tag }}"
+          prerelease="${{ steps.check.outputs.prerelease }}"
+          sha="$GITHUB_SHA"
+
+          shopt -s nullglob
+          asset_files=()
+          if [[ "$WITH_PACKAGE" == "true" ]]; then
+            for file in "$RUNNER_TEMP"/packages/*; do
+              [[ -f "$file" ]] && asset_files+=("$file")
+            done
+            if (( ${#asset_files[@]} == 0 )); then
+              echo "error: this platform expects package files but the run uploaded none." >&2
+              exit 1
+            fi
+          else
+            # Guard the opt-in default: a project that packages but forgot to declare it must
+            # fail loudly here rather than silently publish source-only releases.
+            produced="$(gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
+              --jq '[.artifacts[] | select(.name | startswith("packages-"))] | length')"
+            if (( produced > 0 )); then
+              echo "error: this run produced package artifacts but the caller does not declare" \
+                   "\`package: true\`; declare it so installers are attached to the release." >&2
+              exit 1
+            fi
+          fi
+
+          # All releases sharing our tag name (drafts included), oldest first.
+          list_releases() {
+            gh api "repos/$GH_REPO/releases?per_page=100" \
+              --jq "[.[] | select(.tag_name == \"$tag\")] | sort_by(.id)"
+          }
+
+          for attempt in $(seq 1 8); do
+            (( attempt > 1 )) && sleep "$attempt"
+            releases="$(list_releases)"
+            count="$(jq 'length' <<<"$releases")"
+
+            if (( count == 0 )); then
+              flags=(--draft --title "$tag")
+              if [[ "$tag" == "dev-build" ]]; then
+                flags+=(--notes "Automated development build from commit $sha" --target "$sha")
+              else
+                flags+=(--generate-notes)
+              fi
+              if [[ "$prerelease" == "true" ]]; then
+                flags+=(--prerelease)
+              fi
+              gh release create "$tag" "${flags[@]}" || true
+              continue
+            fi
+
+            if (( count > 1 )); then
+              for extra_id in $(jq -r '.[1:][].id' <<<"$releases"); do
+                gh api -X DELETE "repos/$GH_REPO/releases/$extra_id" || true
+              done
+              continue
+            fi
+
+            release_id="$(jq -r '.[0].id' <<<"$releases")"
+            target="$(jq -r '.[0].target_commitish' <<<"$releases")"
+
+            if [[ "$tag" == "dev-build" && "$target" != "$sha" ]]; then
+              gh api -X DELETE "repos/$GH_REPO/releases/$release_id" || true
+              gh api -X DELETE "repos/$GH_REPO/git/refs/tags/$tag" 2>/dev/null || true
+              continue
+            fi
+
+            if (( ${#asset_files[@]} == 0 )); then
+              echo "Release $tag ready (source-only platform; nothing to attach)."
+              exit 0
+            fi
+            if gh release upload "$tag" "${asset_files[@]}" --clobber; then
+              echo "Attached ${#asset_files[@]} file(s) to release $tag."
+              exit 0
+            fi
+          done
+
+          echo "error: could not attach assets to release $tag after 8 attempts." >&2
+          exit 1

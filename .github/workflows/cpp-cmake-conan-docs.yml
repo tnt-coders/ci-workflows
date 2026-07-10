@@ -1,5 +1,10 @@
 name: C++ CMake Conan Docs
 
+# Self-contained docs pipeline: pre-commit hygiene gates generation, and publication to GitHub
+# Pages happens here because actions/deploy-pages can only deploy an artifact uploaded by its
+# own run. Docs get their own caller workflow (and badge) since a documentation failure is a
+# different signal than a platform build failure.
+
 on:
   workflow_call:
     inputs:
@@ -8,7 +13,11 @@ on:
         default: false
 
 jobs:
+  pre-commit:
+    uses: ./.github/workflows/pre-commit.yml
+
   docs:
+    needs: pre-commit
     runs-on: ubuntu-latest
 
     steps:
@@ -43,3 +52,59 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/release/docs/html
+
+  # Docs publish on master pushes until the first stable tag exists, then only on the latest
+  # stable tag, so the published site tracks the newest release rather than tip-of-master.
+  check-publish:
+    runs-on: ubuntu-latest
+    outputs:
+      publish-docs: ${{ steps.check.outputs.publish-docs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Check if docs should publish
+        id: check
+        shell: bash
+        run: |
+          LATEST=$(git tag --list 'v*' | sort -V | awk '!/-/' | tail -1)
+          if [[ -z "$LATEST" ]]; then
+            # No stable tags — publish on master push
+            if [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
+              echo "publish-docs=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish-docs=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # Stable tags exist — only publish if this push is the latest stable tag
+            if [[ "$GITHUB_REF" == "refs/tags/$LATEST" ]]; then
+              echo "publish-docs=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "publish-docs=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  publish-pages:
+    if: needs.check-publish.outputs.publish-docs == 'true'
+    needs: [docs, check-publish]
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+
+    steps:
+      - name: Publish to GitHub Pages
+        id: publish
+        uses: actions/deploy-pages@v4
