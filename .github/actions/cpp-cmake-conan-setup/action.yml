@@ -64,6 +64,19 @@ runs:
       if: runner.os == 'Windows'
       uses: ilammy/msvc-dev-cmd@v1
 
+    # Without an explicit CC/CXX, CMake and Conan pick whatever clang is first on PATH (the
+    # runner image ships one and the lint job installs another), silently building with clang
+    # instead of the MSVC toolchain configured above. Conan's clang-on-Windows path then assumes
+    # a hardcoded Visual Studio version that newer runner images no longer carry. Pinning cl
+    # keeps CI on the same MSVC toolchain as local development and lets Conan find the installed
+    # Visual Studio through vswhere.
+    - name: Pin MSVC as the compiler
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        echo "CC=cl" >> "$GITHUB_ENV"
+        echo "CXX=cl" >> "$GITHUB_ENV"
+
     - name: Checkout source
       uses: actions/checkout@v4
       with:

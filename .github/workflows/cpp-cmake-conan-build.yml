@@ -148,7 +148,10 @@ jobs:
     runs-on: ${{ inputs.os }}
 
     env:
-      LLVM_VERSION: "21"
+      # LLVM 22: clang-tidy 21's misc-const-correctness pointee analysis has a false-positive
+      # class (it cannot see that a pointer escapes through a non-const return) that 22 fixed,
+      # and 22 matches the developers' local toolchain.
+      LLVM_VERSION: "22"
 
     steps:
       - name: Setup
@@ -166,19 +169,59 @@ jobs:
           sudo apt-get install -y "clang-tidy-$LLVM_VERSION" "clang-tools-$LLVM_VERSION"
           echo "/usr/lib/llvm-$LLVM_VERSION/bin" >> "$GITHUB_PATH"
 
+      # Homebrew only creates a versioned llvm@N formula once N is superseded; while
+      # LLVM_VERSION is the current stable it installs as plain `llvm`. The verify step below
+      # pins the major so a silent brew upgrade to a newer LLVM fails loudly here instead of
+      # shifting the lint baseline.
       - name: Install clang-tidy (macOS)
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install "llvm@$LLVM_VERSION"
-          LLVM_PREFIX="$(brew --prefix "llvm@$LLVM_VERSION")"
+          if brew install "llvm@$LLVM_VERSION" 2>/dev/null; then
+            LLVM_PREFIX="$(brew --prefix "llvm@$LLVM_VERSION")"
+          else
+            brew install llvm
+            LLVM_PREFIX="$(brew --prefix llvm)"
+          fi
           echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
+
+      # The runner image preinstalls an older LLVM, so Windows needs the same pin the other
+      # platforms get; Chocolatey tracks the current LLVM release and the verify step guards
+      # the major version. The compiler stays MSVC (CC/CXX pinned in the setup action) — this
+      # install only provides clang-tidy. Retries mirror the NSIS install: Chocolatey flakes.
+      - name: Install clang-tidy (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installed = $false
+          foreach ($attempt in 1..3) {
+            Write-Host "Installing LLVM via Chocolatey (attempt $attempt of 3)..."
+            choco upgrade llvm -y --no-progress
+            if ($LASTEXITCODE -eq 0) {
+              $installed = $true
+              break
+            }
+            Start-Sleep -Seconds (5 * $attempt)
+          }
+
+          if (-not $installed) {
+            Write-Error "Chocolatey failed to install LLVM after 3 attempts"
+            exit 1
+          }
+
+          Add-Content $env:GITHUB_PATH "C:\Program Files\LLVM\bin"
 
       - name: Verify clang-tidy
         shell: bash
         run: |
           clang-tidy --version
           command -v run-clang-tidy
+          major="$(clang-tidy --version | grep -oE 'version [0-9]+' | grep -oE '[0-9]+')"
+          if [[ "$major" != "$LLVM_VERSION" ]]; then
+            echo "error: clang-tidy major version $major does not match the pinned" \
+                 "LLVM_VERSION $LLVM_VERSION; the lint baseline must not drift silently." >&2
+            exit 1
+          fi
 
       - name: Configure
         run: cmake --preset release
