@@ -98,6 +98,16 @@ runs:
         echo "CONAN_HOME=$conan_home" >> "$GITHUB_ENV"
         echo "path=$conan_home" >> "$GITHUB_OUTPUT"
 
+    # Conan */system recipes (xorg, opengl, libudev, ...) only *check* for OS packages by
+    # default and fail when one is absent from the runner image. Provision the checked-in CI
+    # machine policy (ci-global.conf: let Conan install declared system packages) into the
+    # per-checkout Conan home, so the policy is a reviewable artifact and never leaks outside CI.
+    - name: Provision the CI Conan machine policy
+      shell: bash
+      run: |
+        mkdir -p "$CONAN_HOME"
+        cp "${{ github.action_path }}/ci-global.conf" "$CONAN_HOME/global.conf"
+
     # The runner image version stands in for the toolchain version (MSVC/GCC/Clang come from the
     # image), and the Conan version floats via pip, so both must participate in the cache key:
     # with neither, an exact-key hit after a toolset or Conan bump would pin a stale cache forever
