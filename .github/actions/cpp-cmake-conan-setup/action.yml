@@ -77,10 +77,15 @@ runs:
         echo "CC=cl" >> "$GITHUB_ENV"
         echo "CXX=cl" >> "$GITHUB_ENV"
 
+    # clean is off because the calling workflow bootstrapped this repo's tooling into
+    # .ci-workflows before this action ran, and checkout's default clean would delete that
+    # untracked directory. Hosted runners start from an empty workspace, so nothing else is
+    # ever there to clean.
     - name: Checkout source
       uses: actions/checkout@v4
       with:
         submodules: recursive
+        clean: false
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -173,7 +178,8 @@ runs:
 
     # Registers the prune that runs right before the cache save: post steps execute in reverse
     # invocation order, so invoking this after the cache step places its post (conan cache clean)
-    # ahead of actions/cache's post-job save. Fully-qualified self-reference because relative
-    # `uses:` paths inside a composite resolve against the consumer's checkout, not this repo.
+    # ahead of actions/cache's post-job save. The relative path resolves against the workspace,
+    # where the calling workflow bootstrapped this repo's tooling at its own resolved commit —
+    # keeping pinned consumers frozen end-to-end.
     - name: Register Conan cache prune before save
-      uses: tnt-coders/ci-workflows/.github/actions/conan-cache-prune@master
+      uses: ./.ci-workflows/.github/actions/conan-cache-prune
