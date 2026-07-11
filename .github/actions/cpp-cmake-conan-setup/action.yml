@@ -77,16 +77,6 @@ runs:
         echo "CC=cl" >> "$GITHUB_ENV"
         echo "CXX=cl" >> "$GITHUB_ENV"
 
-    # clean is off because the calling workflow bootstrapped this repo's tooling into
-    # .ci-workflows before this action ran, and checkout's default clean would delete that
-    # untracked directory. Hosted runners start from an empty workspace, so nothing else is
-    # ever there to clean.
-    - name: Checkout source
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        clean: false
-
     - name: Setup Python
       uses: actions/setup-python@v5
       with:

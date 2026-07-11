@@ -58,6 +58,13 @@ jobs:
       # to, so a pinned consumer is frozen end-to-end and releases need no ref rewriting. The
       # sentinel fallback makes checkout fail loudly if the context is ever empty — otherwise
       # checkout would silently grab the default branch.
+      # Source first, tooling second: checkout wipes a not-yet-a-repo directory to get a
+      # clean clone, so the workspace must be a repo before the tooling lands inside it.
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
@@ -166,6 +173,13 @@ jobs:
 
     steps:
       # Tooling bootstrap — see the build job for the rationale.
+      # Source first, tooling second: checkout wipes a not-yet-a-repo directory to get a
+      # clean clone, so the workspace must be a repo before the tooling lands inside it.
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
@@ -257,6 +271,13 @@ jobs:
 
     steps:
       # Tooling bootstrap — see the build job for the rationale.
+      # Source first, tooling second: checkout wipes a not-yet-a-repo directory to get a
+      # clean clone, so the workspace must be a repo before the tooling lands inside it.
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
