@@ -84,13 +84,18 @@ jobs:
 
       # Linux runs the tests under a virtual display: plain JUCE components work headless, but
       # window-class components (DocumentWindow and friends) need a real display connection and
-      # segfault without one. macOS and Windows runners provide a session-level display already.
+      # segfault without one. A window manager must run inside that display: JUCE writes the
+      # WM_PROTOCOLS window property with an atom it looks up only-if-exists, and on a bare Xvfb
+      # server nothing has interned the ICCCM/EWMH atoms, so window creation dies with a fatal
+      # X BadAtom. Any EWMH window manager interns them all at startup; openbox is the smallest.
+      # macOS and Windows runners provide a session-level display already.
       - name: Test
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            sudo apt-get install -y xvfb
-            xvfb-run --auto-servernum ctest --preset release --output-on-failure
+            sudo apt-get install -y xvfb openbox
+            xvfb-run --auto-servernum bash -c \
+              'openbox --sm-disable & sleep 1; ctest --preset release --output-on-failure'
           else
             ctest --preset release --output-on-failure
           fi
