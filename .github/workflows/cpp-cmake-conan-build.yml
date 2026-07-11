@@ -56,20 +56,13 @@ jobs:
     steps:
       # Bootstrap this repo's own tooling at the exact commit this reusable workflow resolved
       # to, so a pinned consumer is frozen end-to-end and releases need no ref rewriting. The
-      # guard exists because an empty ref would make checkout silently grab the default branch.
-      - name: Resolve ci-workflows tooling ref
-        shell: bash
-        run: |
-          if [[ -z "${{ job.workflow_sha }}" ]]; then
-            echo "error: job.workflow_sha is empty; cannot pin the ci-workflows tooling checkout." >&2
-            exit 1
-          fi
-
+      # sentinel fallback makes checkout fail loudly if the context is ever empty — otherwise
+      # checkout would silently grab the default branch.
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
           repository: tnt-coders/ci-workflows
-          ref: ${{ job.workflow_sha }}
+          ref: ${{ job.workflow_sha || 'error-job-workflow-sha-unavailable' }}
           path: .ci-workflows
 
       - name: Setup
@@ -172,22 +165,12 @@ jobs:
       LLVM_VERSION: "22"
 
     steps:
-      # Bootstrap this repo's own tooling at the exact commit this reusable workflow resolved
-      # to, so a pinned consumer is frozen end-to-end and releases need no ref rewriting. The
-      # guard exists because an empty ref would make checkout silently grab the default branch.
-      - name: Resolve ci-workflows tooling ref
-        shell: bash
-        run: |
-          if [[ -z "${{ job.workflow_sha }}" ]]; then
-            echo "error: job.workflow_sha is empty; cannot pin the ci-workflows tooling checkout." >&2
-            exit 1
-          fi
-
+      # Tooling bootstrap — see the build job for the rationale.
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
           repository: tnt-coders/ci-workflows
-          ref: ${{ job.workflow_sha }}
+          ref: ${{ job.workflow_sha || 'error-job-workflow-sha-unavailable' }}
           path: .ci-workflows
 
       - name: Setup
@@ -273,22 +256,12 @@ jobs:
     runs-on: ${{ inputs.os }}
 
     steps:
-      # Bootstrap this repo's own tooling at the exact commit this reusable workflow resolved
-      # to, so a pinned consumer is frozen end-to-end and releases need no ref rewriting. The
-      # guard exists because an empty ref would make checkout silently grab the default branch.
-      - name: Resolve ci-workflows tooling ref
-        shell: bash
-        run: |
-          if [[ -z "${{ job.workflow_sha }}" ]]; then
-            echo "error: job.workflow_sha is empty; cannot pin the ci-workflows tooling checkout." >&2
-            exit 1
-          fi
-
+      # Tooling bootstrap — see the build job for the rationale.
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
           repository: tnt-coders/ci-workflows
-          ref: ${{ job.workflow_sha }}
+          ref: ${{ job.workflow_sha || 'error-job-workflow-sha-unavailable' }}
           path: .ci-workflows
 
       - name: Setup
