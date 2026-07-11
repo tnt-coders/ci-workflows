@@ -82,8 +82,18 @@ jobs:
       - name: Build
         run: cmake --build --preset release
 
+      # Linux runs the tests under a virtual display: plain JUCE components work headless, but
+      # window-class components (DocumentWindow and friends) need a real display connection and
+      # segfault without one. macOS and Windows runners provide a session-level display already.
       - name: Test
-        run: ctest --preset release --output-on-failure
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get install -y xvfb
+            xvfb-run --auto-servernum ctest --preset release --output-on-failure
+          else
+            ctest --preset release --output-on-failure
+          fi
 
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
