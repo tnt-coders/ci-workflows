@@ -54,17 +54,16 @@ jobs:
     runs-on: ${{ inputs.os }}
 
     steps:
-      # Bootstrap this repo's own tooling at the exact commit this reusable workflow resolved
-      # to, so a pinned consumer is frozen end-to-end and releases need no ref rewriting. The
-      # sentinel fallback makes checkout fail loudly if the context is ever empty — otherwise
-      # checkout would silently grab the default branch.
-      # Source first, tooling second: checkout wipes a not-yet-a-repo directory to get a
-      # clean clone, so the workspace must be a repo before the tooling lands inside it.
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # Bootstrap this repo's own tooling at the exact commit this reusable workflow resolved
+      # to, so a pinned consumer is frozen end-to-end and releases need no ref rewriting. The
+      # sentinel fallback makes checkout fail loudly if the context is ever empty (an empty ref
+      # would silently grab the default branch), and the source checkout must come first:
+      # checking out into a not-yet-a-repo directory wipes it, tooling included.
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
@@ -172,14 +171,12 @@ jobs:
       LLVM_VERSION: "22"
 
     steps:
-      # Tooling bootstrap — see the build job for the rationale.
-      # Source first, tooling second: checkout wipes a not-yet-a-repo directory to get a
-      # clean clone, so the workspace must be a repo before the tooling lands inside it.
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # Tooling bootstrap at this workflow's own commit — see the build job for the rationale.
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
@@ -270,14 +267,12 @@ jobs:
     runs-on: ${{ inputs.os }}
 
     steps:
-      # Tooling bootstrap — see the build job for the rationale.
-      # Source first, tooling second: checkout wipes a not-yet-a-repo directory to get a
-      # clean clone, so the workspace must be a repo before the tooling lands inside it.
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # Tooling bootstrap at this workflow's own commit — see the build job for the rationale.
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
