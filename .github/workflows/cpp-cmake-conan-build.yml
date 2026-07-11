@@ -218,28 +218,37 @@ jobs:
       # The runner image preinstalls an older LLVM, so Windows needs the same pin the other
       # platforms get; Chocolatey tracks the current LLVM release and the verify step guards
       # the major version. The compiler stays MSVC (CC/CXX pinned in the setup action) — this
-      # install only provides clang-tidy. Retries mirror the NSIS install: Chocolatey flakes.
+      # install only provides clang-tidy. Success is judged by the installed clang-tidy's major
+      # version, never by Chocolatey's exit code: choco reports "upgraded 1/1" and exits 0 even
+      # when the feed fetch failed (e.g. 504s), which would defeat an exit-code retry loop.
       - name: Install clang-tidy (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $llvm_bin = "C:\Program Files\LLVM\bin"
           $installed = $false
           foreach ($attempt in 1..3) {
             Write-Host "Installing LLVM via Chocolatey (attempt $attempt of 3)..."
             choco upgrade llvm -y --no-progress
-            if ($LASTEXITCODE -eq 0) {
-              $installed = $true
-              break
+
+            $clang_tidy = Join-Path $llvm_bin "clang-tidy.exe"
+            if (Test-Path $clang_tidy) {
+              $match = (& $clang_tidy --version) | Select-String -Pattern 'version (\d+)'
+              if ($match -and ($match.Matches[0].Groups[1].Value -eq $env:LLVM_VERSION)) {
+                $installed = $true
+                break
+              }
             }
-            Start-Sleep -Seconds (5 * $attempt)
+
+            Start-Sleep -Seconds (15 * $attempt)
           }
 
           if (-not $installed) {
-            Write-Error "Chocolatey failed to install LLVM after 3 attempts"
+            Write-Error "clang-tidy $env:LLVM_VERSION not installed after 3 Chocolatey attempts"
             exit 1
           }
 
-          Add-Content $env:GITHUB_PATH "C:\Program Files\LLVM\bin"
+          Add-Content $env:GITHUB_PATH $llvm_bin
 
       - name: Verify clang-tidy
         shell: bash
