@@ -180,10 +180,12 @@ jobs:
     runs-on: ${{ inputs.os }}
 
     env:
-      # LLVM 22: clang-tidy 21's misc-const-correctness pointee analysis has a false-positive
-      # class (it cannot see that a pointer escapes through a non-const return) that 22 fixed,
-      # and 22 matches the developers' local toolchain.
-      LLVM_VERSION: "22"
+      # One exact LLVM release on every platform, installed from LLVM's own release archives:
+      # Homebrew and apt.llvm.org serve only the newest patch of a major and Chocolatey lags
+      # upstream, so none of them can hold the lint baseline still. Bump deliberately, in step
+      # with the developers' local toolchain and the clang-format rev in consumers'
+      # .pre-commit-config.yaml; the verify step fails on any drift.
+      LLVM_VERSION: "23.1.4"
 
     steps:
       - name: Checkout source
@@ -204,75 +206,38 @@ jobs:
         with:
           install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
 
-      - name: Install clang-tidy (Linux)
-        if: runner.os == 'Linux'
+      # Prepended to PATH, so it shadows any LLVM the runner image preinstalls. The compiler stays
+      # the platform default (MSVC on Windows, CC/CXX pinned in the setup action) — this install
+      # only provides clang-tidy.
+      - name: Install clang-tidy
         shell: bash
         run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh "$LLVM_VERSION"
-          sudo apt-get install -y "clang-tidy-$LLVM_VERSION" "clang-tools-$LLVM_VERSION"
-          echo "/usr/lib/llvm-$LLVM_VERSION/bin" >> "$GITHUB_PATH"
-
-      # Homebrew only creates a versioned llvm@N formula once N is superseded; while
-      # LLVM_VERSION is the current stable it installs as plain `llvm`. The verify step below
-      # pins the major so a silent brew upgrade to a newer LLVM fails loudly here instead of
-      # shifting the lint baseline.
-      - name: Install clang-tidy (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          if brew install "llvm@$LLVM_VERSION" 2>/dev/null; then
-            LLVM_PREFIX="$(brew --prefix "llvm@$LLVM_VERSION")"
-          else
-            brew install llvm
-            LLVM_PREFIX="$(brew --prefix llvm)"
-          fi
-          echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
-
-      # The runner image preinstalls an older LLVM, so Windows needs the same pin the other
-      # platforms get; Chocolatey tracks the current LLVM release and the verify step guards
-      # the major version. The compiler stays MSVC (CC/CXX pinned in the setup action) — this
-      # install only provides clang-tidy. Success is judged by the installed clang-tidy's major
-      # version, never by Chocolatey's exit code: choco reports "upgraded 1/1" and exits 0 even
-      # when the feed fetch failed (e.g. 504s), which would defeat an exit-code retry loop.
-      - name: Install clang-tidy (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $llvm_bin = "C:\Program Files\LLVM\bin"
-          $installed = $false
-          foreach ($attempt in 1..3) {
-            Write-Host "Installing LLVM via Chocolatey (attempt $attempt of 3)..."
-            choco upgrade llvm -y --no-progress
-
-            $clang_tidy = Join-Path $llvm_bin "clang-tidy.exe"
-            if (Test-Path $clang_tidy) {
-              $match = (& $clang_tidy --version) | Select-String -Pattern 'version (\d+)'
-              if ($match -and ($match.Matches[0].Groups[1].Value -eq $env:LLVM_VERSION)) {
-                $installed = $true
-                break
-              }
-            }
-
-            Start-Sleep -Seconds (15 * $attempt)
-          }
-
-          if (-not $installed) {
-            Write-Error "clang-tidy $env:LLVM_VERSION not installed after 3 Chocolatey attempts"
-            exit 1
-          }
-
-          Add-Content $env:GITHUB_PATH $llvm_bin
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            Linux)   asset="LLVM-$LLVM_VERSION-Linux-X64.tar.xz" ;;
+            macOS)   asset="LLVM-$LLVM_VERSION-macOS-ARM64.tar.xz" ;;
+            Windows) asset="clang+llvm-$LLVM_VERSION-x86_64-pc-windows-msvc.tar.xz" ;;
+            *) echo "error: unsupported runner OS $RUNNER_OS" >&2; exit 1 ;;
+          esac
+          llvm_dir="${RUNNER_TEMP//\\//}/llvm"
+          mkdir -p "$llvm_dir"
+          # Relative paths from inside the directory: Git Bash's GNU tar reads a `C:/...` archive
+          # path as a remote host.
+          cd "$llvm_dir"
+          curl -fsSL --retry 3 -o "$asset" \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/$asset"
+          tar -xJf "$asset" --strip-components=1
+          rm "$asset"
+          echo "$llvm_dir/bin" >> "$GITHUB_PATH"
 
       - name: Verify clang-tidy
         shell: bash
         run: |
           clang-tidy --version
           command -v run-clang-tidy
-          major="$(clang-tidy --version | grep -oE 'version [0-9]+' | grep -oE '[0-9]+')"
-          if [[ "$major" != "$LLVM_VERSION" ]]; then
-            echo "error: clang-tidy major version $major does not match the pinned" \
+          installed="$(clang-tidy --version | grep -oE 'version [0-9]+(\.[0-9]+)+' | cut -d' ' -f2)"
+          if [[ "$installed" != "$LLVM_VERSION" ]]; then
+            echo "error: clang-tidy $installed does not match the exact pinned" \
                  "LLVM_VERSION $LLVM_VERSION; the lint baseline must not drift silently." >&2
             exit 1
           fi

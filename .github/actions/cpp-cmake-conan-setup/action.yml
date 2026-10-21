@@ -80,7 +80,8 @@ runs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.x"
+        # Pinned like the pre-commit workflow's Python so a runner-image bump cannot move it.
+        python-version: "3.14"
 
     - name: Install Conan
       shell: bash
