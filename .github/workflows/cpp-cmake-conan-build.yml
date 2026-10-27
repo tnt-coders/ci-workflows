@@ -324,7 +324,10 @@ jobs:
             echo "publish-release=true" >> "$GITHUB_OUTPUT"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
             echo "tag=dev-build" >> "$GITHUB_OUTPUT"
-          elif [[ "$GITHUB_REF" =~ ^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?)$ ]]; then
+          # A release tag is v<SemVer>, pre-release included (PackageBuilder's package_create(VERSION)
+          # accepts the same suffix); build metadata ('+') stays out of tags, where it is unusable in
+          # a release URL.
+          elif [[ "$GITHUB_REF" =~ ^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
             echo "publish-release=true" >> "$GITHUB_OUTPUT"
             echo "tag=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
             if [[ "${BASH_REMATCH[2]}" ]]; then
@@ -378,6 +381,22 @@ jobs:
                    "\`package: true\`; declare it so installers are attached to the release." >&2
               exit 1
             fi
+          fi
+
+          # A versioned release must ship what its tag names: PackageBuilder names every installer
+          # <project>-<version>-<os>-<arch>.<ext>, so the version must sit exactly in that slot
+          # (a v1.0.0 tag must not pass for a 1.0.0-alpha installer).
+          if [[ "$tag" != "dev-build" ]]; then
+            # "." is the only regex metacharacter the tag grammar above admits.
+            version_re="${tag#v}"
+            version_re="${version_re//./[.]}"
+            for file in "${asset_files[@]}"; do
+              name="$(basename "$file")"
+              if [[ ! "$name" =~ ^.+-${version_re}-[a-z]+-[a-z0-9_]+\. ]]; then
+                echo "error: tag $tag does not name the version packaged as $name." >&2
+                exit 1
+              fi
+            done
           fi
 
           # All releases sharing our tag name (drafts included), oldest first.
