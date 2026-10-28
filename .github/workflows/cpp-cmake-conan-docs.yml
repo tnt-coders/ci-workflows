@@ -54,7 +54,9 @@ jobs:
           path: build/release/docs/html
 
   # Docs publish on master pushes until the first stable tag exists, then only on the latest
-  # stable tag, so the published site tracks the newest release rather than tip-of-master.
+  # stable tag, so the published site tracks the newest release rather than tip-of-master. A
+  # repository without GitHub Pages (a private one on a free plan cannot have it) builds its docs
+  # and publishes nothing: its Pages setting is the one statement of whether it has a site.
   check-publish:
     runs-on: ubuntu-latest
     outputs:
@@ -69,23 +71,27 @@ jobs:
       - name: Check if docs should publish
         id: check
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           LATEST=$(git tag --list 'v*' | sort -V | awk '!/-/' | tail -1)
           if [[ -z "$LATEST" ]]; then
             # No stable tags — publish on master push
-            if [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
-              echo "publish-docs=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "publish-docs=false" >> "$GITHUB_OUTPUT"
-            fi
+            [[ "$GITHUB_REF" == "refs/heads/master" ]] && publish=true || publish=false
           else
             # Stable tags exist — only publish if this push is the latest stable tag
-            if [[ "$GITHUB_REF" == "refs/tags/$LATEST" ]]; then
-              echo "publish-docs=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "publish-docs=false" >> "$GITHUB_OUTPUT"
-            fi
+            [[ "$GITHUB_REF" == "refs/tags/$LATEST" ]] && publish=true || publish=false
           fi
+          # Only a 404 means "no Pages"; any other failure stops the job.
+          if [[ "$publish" == true ]] && ! pages=$(gh api "repos/$GITHUB_REPOSITORY/pages" 2>&1); then
+            if [[ "$pages" != *"HTTP 404"* ]]; then
+              echo "$pages"
+              exit 1
+            fi
+            echo "::notice::GitHub Pages is not enabled for this repository; the docs are not published."
+            publish=false
+          fi
+          echo "publish-docs=$publish" >> "$GITHUB_OUTPUT"
 
   publish-pages:
     if: needs.check-publish.outputs.publish-docs == 'true'
