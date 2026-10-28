@@ -58,6 +58,22 @@ runs:
           libglu1-mesa-dev \
           mesa-common-dev
 
+    # Configure decides whether a project's Doxygen targets exist, and a project may require
+    # Doxygen outright, so every job that configures needs it on PATH first: without it, docs that
+    # a project builds with its applications or installs in its packages drop out of that
+    # platform, or configure fails. The Windows runner image already ships Doxygen, so this brings
+    # Linux and macOS level with it. It takes no input because none could remove the Windows copy:
+    # an opt-out would only make the platforms differ.
+    - name: Install Doxygen
+      shell: bash
+      run: |
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          sudo apt-get install -y doxygen
+        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+          brew install doxygen
+        fi
+        doxygen --version
+
     # The Ninja generator defaults to using mingw unless we setup MSVC explicitly
     # MSVC seems to be more up to date and consistent so it is better for C++23 support
     - name: Setup MSVC
