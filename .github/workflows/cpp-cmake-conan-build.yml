@@ -76,6 +76,23 @@ jobs:
         with:
           install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
 
+      # Configure decides whether a project's Doxygen targets exist, so Doxygen must be on PATH
+      # before it; without it, docs that a project builds with its applications or installs in its
+      # packages silently drop out of that platform. The Windows runner image already ships
+      # Doxygen, so this brings Linux and macOS level with it. It takes no input because none could
+      # remove the Windows copy: an opt-out would only make the platforms differ. Only this job
+      # builds and packages, so the other jobs stay without it.
+      - name: Install Doxygen
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get install -y doxygen
+          else
+            brew install doxygen
+          fi
+          doxygen --version
+
       - name: Configure
         run: cmake --preset release
 
@@ -141,7 +158,7 @@ jobs:
           package_dir="${RUNNER_TEMP//\\//}/pkg"
 
           # ~110 chars of the 260 budget go to the staging skeleton under the short base
-          # (installer name, component, share/<project>/docs dirs); fail with headroom left.
+          # (installer name, component, the docs' install folders); fail with headroom left.
           if [[ -d build/release/docs ]]; then
             longest=$(find build/release/docs -type f | sed 's|.*/||' | awk '{ print length }' | sort -rn | head -1)
             if (( longest > 145 )); then
