@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: Setup
-        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@v1.0.2
+        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@v1.0.3
         with:
           install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
 
@@ -156,7 +156,7 @@ jobs:
 
     steps:
       - name: Setup
-        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@v1.0.2
+        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@v1.0.3
         with:
           install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
 
@@ -199,7 +199,7 @@ jobs:
 
     steps:
       - name: Setup
-        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@v1.0.2
+        uses: tnt-coders/ci-workflows/.github/actions/cpp-cmake-conan-setup@v1.0.3
         with:
           install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
 
