@@ -119,7 +119,9 @@ jobs:
           # ~110 chars of the 260 budget go to the staging skeleton under the short base
           # (installer name, component, the docs' install folders); fail with headroom left.
           if [[ -d build/release/docs ]]; then
-            longest=$(find build/release/docs -type f | sed 's|.*/||' | awk '{ print length }' | sort -rn | head -1)
+            # awk reads every name: a reader that quits early, like head, breaks the pipe under
+            # pipefail once the listing outgrows the pipe's buffer.
+            longest=$(find build/release/docs -type f | sed 's|.*/||' | awk 'length > max { max = length } END { print max + 0 }')
             if (( longest > 145 )); then
               echo "error: longest generated docs filename is ${longest} chars; staged NSIS" \
                    "paths would exceed MAX_PATH (makensis is not long-path aware). Shorten" \
