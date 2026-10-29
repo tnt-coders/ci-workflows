@@ -26,15 +26,16 @@ jobs:
         with:
           submodules: recursive
 
-      # Bootstrap this repo's own tooling at the exact commit this reusable workflow resolved
-      # to, so a pinned consumer is frozen end-to-end and releases need no ref rewriting. The
-      # sentinel fallback makes checkout fail loudly if the context is ever empty (an empty ref
-      # would silently grab the default branch), and the source checkout must come first:
+      # Bootstrap this repo's own tooling from the repository and at the exact commit this
+      # reusable workflow resolved to, so a fork bootstraps itself, a pinned consumer is frozen
+      # end-to-end, and releases need no ref rewriting. The sentinel fallbacks make checkout fail
+      # loudly if the context is ever empty (an empty repository would silently check out the
+      # caller, an empty ref the default branch), and the source checkout must come first:
       # checking out into a not-yet-a-repo directory wipes it, tooling included.
       - name: Checkout ci-workflows tooling
         uses: actions/checkout@v4
         with:
-          repository: tnt-coders/ci-workflows
+          repository: ${{ job.workflow_repository || 'error-job-workflow-repository-unavailable' }}
           ref: ${{ job.workflow_sha || 'error-job-workflow-sha-unavailable' }}
           path: .ci-workflows
 
