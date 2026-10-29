@@ -44,6 +44,13 @@ jobs:
         with:
           install-juce-dependencies: ${{ inputs.install-juce-dependencies }}
 
+      # The setup action installs Doxygen; Graphviz draws the diagrams of a project whose Doxyfile
+      # sets HAVE_DOT.
+      - name: Install Graphviz
+        shell: bash
+        run: |
+          sudo apt-get install -y graphviz
+
       - name: Configure
         run: cmake --preset release
 

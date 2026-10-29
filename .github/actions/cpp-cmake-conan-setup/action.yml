@@ -63,30 +63,16 @@ runs:
     # a project builds with its applications or installs in its packages drop out of that
     # platform, or configure fails. The Windows runner image already ships Doxygen, so this brings
     # Linux and macOS level with it. It takes no input because none could remove the Windows copy:
-    # an opt-out would only make the platforms differ. Graphviz comes with it on every platform,
-    # because a docs run whose Doxyfile sets HAVE_DOT builds with the applications and needs `dot`.
-    - name: Install Doxygen and Graphviz
+    # an opt-out would only make the platforms differ.
+    - name: Install Doxygen
       shell: bash
       run: |
         if [[ "$RUNNER_OS" == "Linux" ]]; then
-          sudo apt-get install -y doxygen graphviz
+          sudo apt-get install -y doxygen
         elif [[ "$RUNNER_OS" == "macOS" ]]; then
-          brew install doxygen graphviz
+          brew install doxygen
         fi
-
-    # The package shims each Graphviz program into Chocolatey's bin folder, already on PATH.
-    - name: Install Graphviz (Windows)
-      if: runner.os == 'Windows'
-      uses: ./.ci-workflows/.github/actions/choco-install
-      with:
-        package: graphviz
-        installs: C:\ProgramData\chocolatey\bin\dot.exe
-
-    - name: Verify Doxygen and Graphviz
-      shell: bash
-      run: |
         doxygen --version
-        dot -V
 
     # The Ninja generator defaults to using mingw unless we setup MSVC explicitly
     # MSVC seems to be more up to date and consistent so it is better for C++23 support
