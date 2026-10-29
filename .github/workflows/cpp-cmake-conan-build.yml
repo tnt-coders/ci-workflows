@@ -101,34 +101,14 @@ jobs:
             ctest --preset release --output-on-failure
           fi
 
+      # The compiler is checked where the package puts it, which is also where CPack finds it
+      # through the registry.
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (Get-Command makensis -ErrorAction SilentlyContinue) {
-            Write-Host "NSIS already available"
-            exit 0
-          }
-
-          # Chocolatey can exit 0 having installed nothing: a feed outage reports "installed 0/0
-          # packages". Success is therefore the compiler being where the package puts it, which is
-          # also where CPack finds it through the registry.
-          $makensis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
-          $installed = $false
-          foreach ($attempt in 1..3) {
-            Write-Host "Installing NSIS via Chocolatey (attempt $attempt of 3)..."
-            choco install nsis -y --no-progress
-            if (Test-Path $makensis) {
-              $installed = $true
-              break
-            }
-            Start-Sleep -Seconds (5 * $attempt)
-          }
-
-          if (-not $installed) {
-            Write-Error "Chocolatey failed to install NSIS after 3 attempts"
-            exit 1
-          }
+        uses: ./.ci-workflows/.github/actions/choco-install
+        with:
+          package: nsis
+          installs: C:\Program Files (x86)\NSIS\makensis.exe
 
       # Packages stage under a short runner-temp base instead of the deep build tree: NSIS's
       # makensis carries no longPathAware manifest, so every staged file path must stay under

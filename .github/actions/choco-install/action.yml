@@ -1,0 +1,38 @@
+name: Chocolatey Install
+description: >
+  Installs one Chocolatey package on a Windows runner, retrying a feed outage. Chocolatey can exit
+  0 having installed nothing (an outage reports "installed 0/0 packages"), so success is the file
+  the package puts in place, not the exit code. A file already there means nothing to install.
+
+inputs:
+  package:
+    description: The Chocolatey package to install.
+    required: true
+  installs:
+    description: A file the package installs, whose presence proves the install.
+    required: true
+
+runs:
+  using: composite
+
+  steps:
+    - name: Install ${{ inputs.package }}
+      shell: pwsh
+      env:
+        PACKAGE: ${{ inputs.package }}
+        INSTALLS: ${{ inputs.installs }}
+      run: |
+        if (Test-Path $env:INSTALLS) {
+          Write-Host "$env:PACKAGE already installed"
+          exit 0
+        }
+        foreach ($attempt in 1..3) {
+          Write-Host "Installing $env:PACKAGE via Chocolatey (attempt $attempt of 3)..."
+          choco install $env:PACKAGE -y --no-progress
+          if (Test-Path $env:INSTALLS) {
+            exit 0
+          }
+          Start-Sleep -Seconds (5 * $attempt)
+        }
+        Write-Error "Chocolatey failed to install $env:PACKAGE after 3 attempts"
+        exit 1
