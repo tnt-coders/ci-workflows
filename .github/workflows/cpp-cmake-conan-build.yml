@@ -280,14 +280,15 @@ jobs:
   #
   # `!cancelled()` disables the implicit all-needs-succeeded gate so that lint/test-package jobs
   # skipped BY CONFIGURATION don't skip the release; the explicit result checks then re-impose
-  # "everything that ran must have passed" (a config-skipped job reports 'skipped', which passes
-  # the != 'failure' checks, while a job skipped because pre-commit failed drags build with it).
+  # "everything must have passed or been configured off". A job skipped because pre-commit failed
+  # drags build with it, and a job that never ran — 'cancelled', as when no hosted runner picks it
+  # up — blocks the release instead of letting untested packages through.
   release:
     if: >-
       inputs.release && github.event_name == 'push' && !cancelled() &&
       needs.build.result == 'success' &&
-      needs.lint.result != 'failure' &&
-      needs.test-package.result != 'failure'
+      contains(fromJSON('["success", "skipped"]'), needs.lint.result) &&
+      contains(fromJSON('["success", "skipped"]'), needs.test-package.result)
     needs: [build, lint, test-package]
     runs-on: ubuntu-latest
     permissions:
