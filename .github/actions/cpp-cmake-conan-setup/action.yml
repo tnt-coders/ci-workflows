@@ -88,6 +88,16 @@ runs:
         doxygen --version
         dot -V
 
+    # The Windows installers are NSIS ones, which a project's package step builds and a package
+    # library's test_package may compile too. The compiler is checked where the package puts it,
+    # which is also where CPack finds it through the registry.
+    - name: Install NSIS (Windows)
+      if: runner.os == 'Windows'
+      uses: ./.ci-workflows/.github/actions/choco-install
+      with:
+        package: nsis
+        installs: C:\Program Files (x86)\NSIS\makensis.exe
+
     # The Ninja generator defaults to using mingw unless we setup MSVC explicitly
     # MSVC seems to be more up to date and consistent so it is better for C++23 support
     - name: Setup MSVC

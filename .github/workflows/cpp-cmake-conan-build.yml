@@ -101,15 +101,6 @@ jobs:
             ctest --preset release --output-on-failure
           fi
 
-      # The compiler is checked where the package puts it, which is also where CPack finds it
-      # through the registry.
-      - name: Install NSIS (Windows)
-        if: runner.os == 'Windows'
-        uses: ./.ci-workflows/.github/actions/choco-install
-        with:
-          package: nsis
-          installs: C:\Program Files (x86)\NSIS\makensis.exe
-
       # Packages stage under a short runner-temp base instead of the deep build tree: NSIS's
       # makensis carries no longPathAware manifest, so every staged file path must stay under
       # MAX_PATH (260) on Windows, and generated docs carry filenames long enough to overflow
